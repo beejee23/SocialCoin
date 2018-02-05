@@ -1,0 +1,92 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+#
+```{r}
+library(tidyverse)
+library(reshape2)
+library(forcats)
+```
+
+
+Get monthly values of all coin data for 2017
+```{r}
+md <- read_csv("crypto-markets.csv")
+mdsplit <- separate(md,date,c("year","month","day"),sep = "-")
+mdsplit$year <- as.integer(mdsplit$year)
+md2017 <- select(filter(mdsplit, year == 2017),symbol,month,open,high,low,close,volume,market)
+md2017$symbol <- as_factor(md2017$symbol)
+md2017$month <- as.integer(md2017$month)
+```
+Average per month per coin
+```{r}
+mdmonth <- md2017 %>% 
+    group_by(symbol,month) %>% 
+    summarize(open = mean(open, na.rm = TRUE),
+              high = mean(high, na.rm = TRUE),
+              low = mean(low, na.rm = TRUE),
+              close = mean(close, na.rm = TRUE),
+              market = mean(market, na.rm = TRUE),
+              )
+```
+Now import the reddit monthly data
+```{r}
+# Import
+social1 <-read_csv("words_by_month/results-2017_01.csv") %>% mutate(month = 1)
+social2 <-read_csv("words_by_month/results-2017_02.csv") %>% mutate(month = 2)
+social3 <-read_csv("words_by_month/results-2017_03.csv") %>% mutate(month = 3)
+social4 <-read_csv("words_by_month/results-2017_04.csv") %>% mutate(month = 4)
+social5 <-read_csv("words_by_month/results-2017_05.csv") %>% mutate(month = 5)
+social6 <-read_csv("words_by_month/results-2017_06.csv") %>% mutate(month = 6)
+social7 <-read_csv("words_by_month/results-2017_07.csv") %>% mutate(month = 7)
+social8 <-read_csv("words_by_month/results-2017_08.csv") %>% mutate(month = 8)
+social9 <-read_csv("words_by_month/results-2017_09.csv") %>% mutate(month = 9)
+social10 <-read_csv("words_by_month/results-2017_10.csv") %>% mutate(month = 10)
+social11 <-read_csv("words_by_month/results-2017_11.csv") %>% mutate(month = 11)
+social12 <-read_csv("words_by_month/results-2017_12.csv") %>% mutate(month = 12)
+# Combine
+reddit <- bind_rows(social1,social2,social3,social4,social5,social6,social7,social8,social9,social10,social11,social12)
+
+reddit$word <- as_factor(reddit$word)
+colnames(reddit)[1] <- "symbol"
+reddit$month <- as.integer(reddit$month)
+```
+
+Combine the social and market data
+```{r}
+combined <- mdmonth %>% 
+  left_join(reddit) %>% 
+  drop_na()
+sub <- select(combined,symbol,month,close,s_count)
+colnames(sub)[1] <- "coin"
+colnames(sub)[3] <- "price"
+colnames(sub)[4] <- "mentions"
+
+# normal price and reddit mentions to max per coin
+subnorm <- sub %>% 
+    group_by(coin) %>% 
+    mutate(price = price/max(price),
+              mentions = mentions/max(mentions))
+```
+Get rid of coins without at least 8 months of social media data
+```{r}
+bycoin <- subnorm %>% 
+    group_by(coin) %>% 
+    summarise(count = n()) %>% 
+    filter(count > 8)
+
+subnormgood <- subnorm %>% 
+    filter(coin %in% bycoin$coin)
+```
+Plot the price and mentions pver time on the same graph.
+Red is the price of each coin normailzed to its max value during 2017
+BLu is the price of each coin normailzed to its max value during 2017
+```{r}
+ggplot(subnormgood,aes(x = month, y = relative_value))+
+  geom_jitter(aes(y = price),color = "red")+
+  geom_smooth(aes(y = price),color = "red")+
+  geom_jitter(aes(y = mentions),color = "blue")+
+  geom_smooth(aes(y = mentions),color = "blue")
+```
+
